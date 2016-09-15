@@ -6,6 +6,9 @@ defmodule Phoenix.Test.ChannelTest do
   Application.put_env(:phoenix, __MODULE__.Endpoint, config)
 
   alias Phoenix.Socket
+  alias Phoenix.Socket.{Broadcast, Message}
+
+  @moduletag :capture_log
 
   defmodule Endpoint do
     use Phoenix.Endpoint, otp_app: :phoenix
@@ -17,6 +20,11 @@ defmodule Phoenix.Test.ChannelTest do
     intercept ["stop"]
 
     def join("foo:ok", _, socket) do
+      {:ok, socket}
+    end
+
+    def join("foo:external", _, socket) do
+      :ok = Endpoint.subscribe("external:topic")
       {:ok, socket}
     end
 
@@ -74,18 +82,13 @@ defmodule Phoenix.Test.ChannelTest do
       {:stop, :shutdown, :ok, socket}
     end
 
-    def handle_in("subscribe", %{"topic" => topic}, socket) do
-      subscribe(socket, topic)
-      {:reply, :ok, socket}
-    end
-
-    def handle_in("unsubscribe", %{"topic" => topic}, socket) do
-      unsubscribe(socket, topic)
-      {:reply, :ok, socket}
-    end
-
     def handle_out("stop", _payload, socket) do
       {:stop, :shutdown, socket}
+    end
+
+    def handle_info(%Broadcast{event: event, payload: payload}, socket) do
+      push socket, event, payload
+      {:noreply, socket}
     end
 
     def handle_info(:stop, socket) do
@@ -284,6 +287,17 @@ defmodule Phoenix.Test.ChannelTest do
     assert_broadcast "broadcast", %{"foo" => "bar"}
   end
 
+  test "pushes atom parameter keys as strings" do
+    {:ok, _, socket} = join(socket(), Channel, "foo:ok")
+
+    ref = push socket, "reply", %{req: %{parameter: 1}}
+    assert_reply ref, :ok, %{"resp" => %{"parameter" => 1}}
+  end
+
+  test "connects with atom parameter keys as strings" do
+    :error = connect(UserSocket, %{reject: true})
+  end
+
   ## handle_out
 
   test "push broadcasts by default" do
@@ -378,18 +392,12 @@ defmodule Phoenix.Test.ChannelTest do
       {:error, :cant}
   end
 
-  test "subscribe and subscribe" do
-    socket = subscribe_and_join!(socket(), Channel, "foo:ok")
-    socket.endpoint.broadcast!("another:topic", "event", %{})
-    refute_receive %Phoenix.Socket.Message{}
-    ref = push socket, "subscribe", %{"topic" => "another:topic"}
-    assert_reply ref, :ok
-    socket.endpoint.broadcast!("another:topic", "event", %{})
-    assert_receive %Phoenix.Socket.Message{topic: "another:topic"}
+  test "external subscriptions" do
+    socket = subscribe_and_join!(socket(), Channel, "foo:external")
+    socket.endpoint.broadcast!("external:topic", "external_event", %{one: 1})
+    assert_receive %Message{topic: "foo:external",
+                            event: "external_event",
+                            payload: %{one: 1}}
 
-    ref = push socket, "unsubscribe", %{"topic" => "another:topic"}
-    assert_reply ref, :ok
-    socket.endpoint.broadcast!("another:topic", "event", %{})
-    refute_receive %Phoenix.Socket.Message{}
   end
 end

@@ -30,12 +30,21 @@ defmodule Phoenix.Transports.WebSocket do
   ## Serializer
 
   By default, JSON encoding is used to broker messages to and from clients.
-  A custom serializer may be given as module which implements the `encode!/1`
+  A custom serializer may be given as a module which implements the `encode!/1`
   and `decode!/2` functions defined by the `Phoenix.Transports.Serializer`
   behaviour.
 
   The `encode!/1` function must return a tuple in the format
   `{:socket_push, :text | :binary, String.t | binary}`.
+
+  ## Garbage collection
+
+  It's possible to force garbage collection in the transport process after
+  processing large messages.
+
+  Send `:garbage_collect` clause to the transport process:
+
+      send socket.transport_pid, :garbage_collect
   """
 
   @behaviour Phoenix.Socket.Transport
@@ -60,7 +69,7 @@ defmodule Phoenix.Transports.WebSocket do
     conn =
       conn
       |> code_reload(opts, endpoint)
-      |> Plug.Conn.fetch_query_params
+      |> fetch_query_params()
       |> Transport.transport_log(opts[:transport_log])
       |> Transport.force_ssl(handler, endpoint, opts)
       |> Transport.check_origin(handler, endpoint, opts)
@@ -103,7 +112,7 @@ defmodule Phoenix.Transports.WebSocket do
 
   @doc false
   def ws_handle(opcode, payload, state) do
-    msg   = state.serializer.decode!(payload, opcode: opcode)
+    msg = state.serializer.decode!(payload, opcode: opcode)
 
     case Transport.dispatch(msg, state.channels, state.socket) do
       :noreply ->
@@ -134,6 +143,12 @@ defmodule Phoenix.Transports.WebSocket do
 
   def ws_info({:socket_push, _, _encoded_payload} = msg, state) do
     format_reply(msg, state)
+  end
+
+  @doc false
+  def ws_info(:garbage_collect, state) do
+    :erlang.garbage_collect(self())
+    {:ok, state}
   end
 
   def ws_info(_, state) do

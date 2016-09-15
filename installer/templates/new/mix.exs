@@ -8,13 +8,13 @@ defmodule <%= application_module %>.Mixfile do
      config_path: "../../config/config.exs",
      deps_path: "../../deps",
      lockfile: "../../mix.lock",<% end %>
-     elixir: "~> 1.2",
+     elixir: "~> 1.3",
      elixirc_paths: elixirc_paths(Mix.env),
      compilers: [:phoenix, :gettext] ++ Mix.compilers,
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,<%= if ecto do %>
-     aliases: aliases,<% end %>
-     deps: deps]
+     aliases: aliases(),<% end %>
+     deps: deps()]
   end
 
   # Configuration for the OTP application.
@@ -22,7 +22,7 @@ defmodule <%= application_module %>.Mixfile do
   # Type `mix help compile.app` for more information.
   def application do
     [mod: {<%= application_module %>, []},
-     applications: [:phoenix<%= if html do %>, :phoenix_html<% end %>, :cowboy, :logger, :gettext<%= if ecto do %>,
+     applications: [:phoenix, :phoenix_pubsub<%= if html do %>, :phoenix_html<% end %>, :cowboy, :logger, :gettext<%= if ecto do %>,
                     :phoenix_ecto, <%= inspect adapter_app %><% end %>]]
   end
 
@@ -34,13 +34,12 @@ defmodule <%= application_module %>.Mixfile do
   #
   # Type `mix help deps` for examples and options.
   defp deps do
-    [<%= phoenix_dep %>,<%= if ecto do %>
-     {:phoenix_ecto, "~> 3.0-rc"},
+    [<%= phoenix_dep %>,
+     {:phoenix_pubsub, "~> 1.0"},<%= if ecto do %>
+     {:phoenix_ecto, "~> 3.0"},
      {<%= inspect adapter_app %>, ">= 0.0.0"},<% end %><%= if html do %>
-     {:phoenix_html, "~> 2.5"},
+     {:phoenix_html, "~> 2.6"},
      {:phoenix_live_reload, "~> 1.0", only: :dev},<% end %>
-     # TODO move to hex release
-     {:phoenix_pubsub, github: "phoenixframework/phoenix_pubsub"},
      {:gettext, "~> 0.11"},
      {:cowboy, "~> 1.0"}]
   end<%= if ecto do %>

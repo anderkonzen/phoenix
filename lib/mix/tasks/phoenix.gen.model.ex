@@ -21,7 +21,7 @@ defmodule Mix.Tasks.Phoenix.Gen.Model do
   ## Attributes
 
   The resource fields are given using `name:type` syntax
-  where type are the types supported by Ecto. Ommitting
+  where type are the types supported by Ecto. Omitting
   the type makes it default to `:string`:
 
       mix phoenix.gen.model User users name age:integer
@@ -128,7 +128,7 @@ defmodule Mix.Tasks.Phoenix.Gen.Model do
   defp validate_args!([_, plural | _] = args) do
     cond do
       String.contains?(plural, ":") ->
-        raise_with_help
+        raise_with_help()
       plural != Phoenix.Naming.underscore(plural) ->
         Mix.raise "Expected the second argument, #{inspect plural}, to be all lowercase using snake_case convention"
       true ->
@@ -137,9 +137,10 @@ defmodule Mix.Tasks.Phoenix.Gen.Model do
   end
 
   defp validate_args!(_) do
-    raise_with_help
+    raise_with_help()
   end
 
+  @spec raise_with_help() :: no_return()
   defp raise_with_help do
     Mix.raise """
     mix phoenix.gen.model expects both singular and plural names
@@ -175,12 +176,13 @@ defmodule Mix.Tasks.Phoenix.Gen.Model do
 
   defp indexes(plural, assocs, uniques) do
     Enum.concat(
-      Enum.map(assocs, fn {key, _} ->
-        "create index(:#{plural}, [:#{key}])"
-      end),
-      Enum.map(uniques, fn key ->
-        "create unique_index(:#{plural}, [:#{key}])"
-      end))
+      Enum.map(uniques, fn key -> {key, true} end),
+      Enum.map(assocs, fn {key, _} -> {key, false} end))
+    |> Enum.uniq_by(fn {key, _} -> key end)
+    |> Enum.map(fn
+      {key, false} -> "create index(:#{plural}, [:#{key}])"
+      {key, true}  -> "create unique_index(:#{plural}, [:#{key}])"
+    end)
   end
 
   defp migration(false, _path), do: []
